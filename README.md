@@ -1,1 +1,1 @@
-# open_cv_project
+## A program that determines from the video stream the number of the frame in which the image of the object under study is in focus and determines the boundaries and rotation of the object relative to the camera.
