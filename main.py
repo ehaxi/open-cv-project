@@ -1,49 +1,63 @@
 import cv2
 import keyboard
 import numpy as np
-import matplotlib.pyplot as plt
-import imutils
-import easyocr
-import os
+import math
 
 class VideoHandler():
     def __init__(self, url):
         self.url = url
-        self.cap = cv2.VideoCapture(0)
+        self.cap = cv2.VideoCapture(url)
     def show_video(self):
-        kernel = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
-        thresh = 40
+        hsv_min = np.array((101, 30, 60), np.uint8)
+        hsv_max = np.array((255, 255, 255), np.uint8)
         counter = 0
         max_cont = -1
         count_flag = 0
+        arr_lap = []
+        arr_frame = []
 
         while True:
             ret, frame = self.cap.read()
 
             if frame is not None:
-                roi = frame[50:720, 300:1000]
                 counter += 1
 
-                frame_gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-                frame_gray = cv2.filter2D(frame_gray, -1, kernel)
-                _, frame_thresh = cv2.threshold(frame_gray, thresh, 255, cv2.THRESH_BINARY)
+                laplacian = cv2.Laplacian(frame, cv2.CV_64F).var()
+                arr_lap.append(laplacian)
+                arr_frame.append(counter)
 
-                contours, _ = cv2.findContours(frame_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)  # меняем цветовую модель с BGR на HSV
+                thresh = cv2.inRange(hsv, hsv_min, hsv_max)  # применяем цветовой фильтр
+                contours0, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-                for cnt in contours:
-                    area = cv2.contourArea(cnt)
+                for cnt in contours0:
 
-                    if len(cnt) >= max_cont:
-                        max_cont = len(cnt)
-                        count_flag = counter
+                    rect = cv2.minAreaRect(cnt)  # пытаемся вписать прямоугольник
+                    box = cv2.boxPoints(rect)  # поиск четырех вершин прямоугольника
+                    box = np.intp(box)  # округление координат
+                    center = (int(rect[0][0]), int(rect[0][1]))
+                    area = int(rect[1][0] * rect[1][1])  # вычисление площади
 
-                    if area > 400:
-                        rect = cv2.minAreaRect(cnt)
-                        box = cv2.boxPoints(rect)
-                        box = np.intp(box)
+                    # вычисление координат двух векторов, являющихся сторонам прямоугольника
+                    edge1 = np.intp((box[1][0] - box[0][0], box[1][1] - box[0][1]))
+                    edge2 = np.intp((box[2][0] - box[1][0], box[2][1] - box[1][1]))
 
-                        print(f"Angle: {round(rect[2], 2)}")
-                        cv2.drawContours(roi, [box],0, (0, 255, 0), 2)
+                    # выясняем какой вектор больше
+                    usedEdge = edge1
+                    if cv2.norm(edge2) > cv2.norm(edge1):
+                        usedEdge = edge2
+                    reference = (1, 0)  # горизонтальный вектор, задающий горизонт
+
+                    # вычисляем угол между самой длинной стороной прямоугольника и горизонтом
+                    angle = 180.0 / math.pi * math.acos((reference[0] * usedEdge[0] + reference[1] * usedEdge[1]) / (
+                                cv2.norm(reference) * cv2.norm(usedEdge)))
+
+                    if area > 6500:
+                        cv2.drawContours(frame, [box], 0, (0, 255, 0), 2)  # рисуем прямоугольник
+                        cv2.circle(frame, center, 5, (0, 255, 0), 2)  # рисуем маленький кружок в центре прямоугольника
+                        # выводим в кадр величину угла наклона
+                        cv2.putText(frame, "%d" % int(angle), (center[0] + 20, center[1] - 20),
+                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
                 cv2.imshow("mask", frame)
 
@@ -53,13 +67,11 @@ class VideoHandler():
             else:
                 break
 
-        print('\n', count_flag)
+        print(arr_frame[arr_lap.index(max(arr_lap))])
 
         self.cap.release()
         cv2.destroyAllWindows()
 
-
-
 if __name__ == "__main__":
-    url = "videos/video_without_turn.mp4" # input()
+    url = "videos/video_2024-05-19_15-28-12.mp4" # input()
     VideoHandler(url).show_video()
