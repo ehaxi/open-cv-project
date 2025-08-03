@@ -19,7 +19,3 @@
 - OpenCV 4.x
 - NumPy для числовых операций
 - Matplotlib для визуализации
-
-### Установка зависимостей
-```bash
-pip install -r requirements.txt
